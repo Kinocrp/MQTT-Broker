@@ -93,7 +93,7 @@ void handleClient(SOCKET clientSocket) {
                         int timeoutMs = keepAliveSeconds * 1500;
                         DWORD timeout = timeoutMs;
                         setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
-                        std::cout << "          -> [Watchdog Armed] Socket will auto-kill if silent for " << timeoutMs << " ms." << std::endl;
+                        std::cout << "          -> Socket will auto-kill if silent for " << timeoutMs << " ms." << std::endl;
                     }
 
                     char connack[] = { 0x20, 0x02, 0x00, 0x00 };
