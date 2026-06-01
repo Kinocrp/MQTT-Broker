@@ -82,6 +82,20 @@ void handleClient(SOCKET clientSocket) {
             switch (packetType) {
                 case 0x10: {
                     std::cout << "\n[CONNECT] Received." << std::endl;
+
+                    unsigned char keepAliveMsb = currentPacket[headerLength + 8];
+                    unsigned char keepAliveLsb = currentPacket[headerLength + 9];
+                    int keepAliveSeconds = (keepAliveMsb << 8) | keepAliveLsb;
+
+                    std::cout << "          -> Client Keep-Alive: " << keepAliveSeconds << " seconds." << std::endl;
+
+                    if (keepAliveSeconds > 0) {
+                        int timeoutMs = keepAliveSeconds * 1500;
+                        DWORD timeout = timeoutMs;
+                        setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+                        std::cout << "          -> [Watchdog Armed] Socket will auto-kill if silent for " << timeoutMs << " ms." << std::endl;
+                    }
+
                     char connack[] = { 0x20, 0x02, 0x00, 0x00 };
                     send(clientSocket, connack, sizeof(connack), 0);
                     break;
