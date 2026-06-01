@@ -24,13 +24,13 @@ void printHex(const char* buffer, int length) {
 */
 
 void handleClient(SOCKET clientSocket) {
-    char buffer[4096]; 
+    char buffer[4096];
 
     while (true) {
         int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-        
+
         if (bytesReceived <= 0) {
-            std::cout << "\n[Client Disconnected] Socket ID: " << clientSocket << " connection lost." << std::endl;
+            std::cout << "\n[DISCONNECTED] Socket ID: " << clientSocket << " connection lost." << std::endl;
 
             {
                 std::lock_guard<std::mutex> lock(broker_mutex);
@@ -44,14 +44,14 @@ void handleClient(SOCKET clientSocket) {
                     );
 
                     if (subscribers.empty()) {
-                        std::cout << "[Memory Clean] Topic '" << it->first << "' is empty. Removing from map." << std::endl;
-                        it = topic_subscribers.erase(it); 
+                        std::cout << "[CLEAN] Topic '" << it->first << "' is empty. Removing from map." << std::endl;
+                        it = topic_subscribers.erase(it);
                     } else {
                         ++it;
                     }
                 }
             }
-            std::cout << "[Cleanup Complete] Socket " << clientSocket << " fully removed." << std::endl;
+            std::cout << "[CLEAN] Socket " << clientSocket << " fully removed." << std::endl;
 
             closesocket(clientSocket);
             break;
@@ -66,10 +66,10 @@ void handleClient(SOCKET clientSocket) {
             int remainingLength = 0;
             int headerLength = 1;
             unsigned char encodedByte;
-            
+
             do {
-                if (offset + headerLength >= bytesReceived) break; 
-                
+                if (offset + headerLength >= bytesReceived) break;
+
                 encodedByte = buffer[offset + headerLength];
                 remainingLength += (encodedByte & 127) * multiplier;
                 multiplier *= 128;
@@ -100,14 +100,14 @@ void handleClient(SOCKET clientSocket) {
                     send(clientSocket, connack, sizeof(connack), 0);
                     break;
                 }
-                
+
                 case 0x80: {
                     unsigned char packetIdMsb = currentPacket[headerLength];
                     unsigned char packetIdLsb = currentPacket[headerLength + 1];
-                    
+
                     std::cout << "\n[SUBSCRIBE] Packet ID: " << (int)((packetIdMsb << 8) | packetIdLsb) << std::endl;
                     std::vector<char> subackPayload;
-                    int payloadOffset = headerLength + 2; 
+                    int payloadOffset = headerLength + 2;
 
                     while (payloadOffset < totalPacketSize) {
                         int topicLen = (static_cast<unsigned char>(currentPacket[payloadOffset]) << 8) | static_cast<unsigned char>(currentPacket[payloadOffset + 1]);
@@ -126,7 +126,7 @@ void handleClient(SOCKET clientSocket) {
                             topic_subscribers[topic].push_back(clientSocket);
                         }
 
-                        subackPayload.push_back(0x00); 
+                        subackPayload.push_back(0x00);
                     }
 
                     int subackRemainingLen = 2 + subackPayload.size();
@@ -146,7 +146,6 @@ void handleClient(SOCKET clientSocket) {
                 case 0x30: {
                     int topicLen = (static_cast<unsigned char>(currentPacket[headerLength]) << 8) | static_cast<unsigned char>(currentPacket[headerLength + 1]);
                     std::string topic(currentPacket + headerLength + 2, topicLen);
-                    
                     std::cout << "\n[PUBLISH] Topic: '" << topic << "'" << std::endl;
 
                     std::lock_guard<std::mutex> lock(broker_mutex);
@@ -201,7 +200,7 @@ int main() {
         sockaddr_in clientAddr;
         int clientAddrSize = sizeof(clientAddr);
         SOCKET clientSocket = accept(serverSocket, (SOCKADDR*)&clientAddr, &clientAddrSize);
-        
+
         if (clientSocket != INVALID_SOCKET) {
             std::cout << "\n[NEW CONNECTION] Client connected! Socket ID: " << clientSocket << std::endl;
             std::thread(handleClient, clientSocket).detach();
