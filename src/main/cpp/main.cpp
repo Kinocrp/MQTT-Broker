@@ -30,7 +30,29 @@ void handleClient(SOCKET clientSocket) {
         int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
         
         if (bytesReceived <= 0) {
-            std::cout << "[Client Disconnected] Socket ID: " << clientSocket << std::endl;
+            std::cout << "\n[Client Disconnected] Socket ID: " << clientSocket << " connection lost." << std::endl;
+
+            {
+                std::lock_guard<std::mutex> lock(broker_mutex);
+
+                for (auto it = topic_subscribers.begin(); it != topic_subscribers.end(); ) {
+                    std::vector<SOCKET>& subscribers = it->second;
+
+                    subscribers.erase(
+                        std::remove(subscribers.begin(), subscribers.end(), clientSocket),
+                        subscribers.end()
+                    );
+
+                    if (subscribers.empty()) {
+                        std::cout << "[Memory Clean] Topic '" << it->first << "' is empty. Removing from map." << std::endl;
+                        it = topic_subscribers.erase(it); 
+                    } else {
+                        ++it;
+                    }
+                }
+            }
+            std::cout << "[Cleanup Complete] Socket " << clientSocket << " fully removed." << std::endl;
+
             closesocket(clientSocket);
             break;
         }
