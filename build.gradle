@@ -1,0 +1,10 @@
+plugins {
+    id 'cpp-application'
+}
+
+application {
+    baseName = "MQTT-Broker"
+
+    targetMachines.add(machines.windows.x86)
+    targetMachines.add(machines.windows.x86_64)
+}
