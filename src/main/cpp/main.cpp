@@ -8,28 +8,20 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
+// #define DEBUG
+
 #pragma comment(lib, "Ws2_32.lib")
 
 std::unordered_map<std::string, std::vector<SOCKET>> topic_subscribers;
 std::mutex broker_mutex;
 
-/*
-void printHex(const char* buffer, int length) {
-    for (int i = 0; i < length; ++i) {
-        std::cout << std::hex << std::setw(2) << std::setfill('0') << std::uppercase 
-                  << (static_cast<unsigned int>(buffer[i]) & 0xFF) << " ";
-    }
-    std::cout << std::dec << std::endl;
-}
-*/
-
 void handleClient(SOCKET clientSocket) {
-    char buffer[4096];
+    unsigned char buffer[4096];
+    int leftoverBytes = 0;
 
     while (true) {
-        int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-
-        if (bytesReceived <= 0) {
+        int newBytes = recv(clientSocket, (char*)(buffer + leftoverBytes), sizeof(buffer) - leftoverBytes, 0);
+        if (newBytes <= 0) {
             std::cout << "\n[DISCONNECTED] Socket ID: " << clientSocket << " connection lost." << std::endl;
 
             {
@@ -57,8 +49,10 @@ void handleClient(SOCKET clientSocket) {
             break;
         }
 
+        int bytesReceived = leftoverBytes + newBytes;
         int offset = 0;
         while (offset < bytesReceived) {
+            if (offset + 1 > bytesReceived) break;
 
             unsigned char packetType = buffer[offset] & 0xF0;
 
@@ -66,6 +60,7 @@ void handleClient(SOCKET clientSocket) {
             int remainingLength = 0;
             int headerLength = 1;
             unsigned char encodedByte;
+            bool headerComplete = false;
 
             do {
                 if (offset + headerLength >= bytesReceived) break;
@@ -74,10 +69,17 @@ void handleClient(SOCKET clientSocket) {
                 remainingLength += (encodedByte & 127) * multiplier;
                 multiplier *= 128;
                 headerLength++;
-            } while ((encodedByte & 128) != 0);
+                if ((encodedByte & 128) == 0) {
+                    headerComplete = true;
+                    break;
+                }
+            } while (true);
+            if (!headerComplete) break;
 
             int totalPacketSize = headerLength + remainingLength;
-            char* currentPacket = buffer + offset;
+            if (offset + totalPacketSize > bytesReceived) break;
+
+            char* currentPacket = (char*)(buffer + offset);
 
             switch (packetType) {
                 case 0x10: {
@@ -154,6 +156,19 @@ void handleClient(SOCKET clientSocket) {
                     std::string topic(currentPacket + headerLength + 2, topicLen);
                     std::cout << "\n[PUBLISH] Topic: '" << topic << "'" << std::endl;
 
+                    #ifdef DEBUG
+                    int payloadStartOffset = headerLength + 2 + topicLen; 
+
+                    if ((packetType & 0x06) >> 1 > 0) payloadStartOffset += 2;
+                    int payloadLength = totalPacketSize - payloadStartOffset;
+                    if (payloadLength > 0) {
+                        std::string payloadText(currentPacket + payloadStartOffset, payloadLength);
+                        std::cout << "          => Payload (" << payloadLength << " Bytes): " << payloadText << std::endl;
+                    } else {
+                        std::cout << "          => Payload: None" << std::endl;
+                    }
+                    #endif
+
                     std::lock_guard<std::mutex> lock(broker_mutex);
                     if (topic_subscribers.find(topic) != topic_subscribers.end()) {
                         int targetCount = 0;
@@ -180,6 +195,11 @@ void handleClient(SOCKET clientSocket) {
                     break;
             }
             offset += totalPacketSize;
+        }
+
+        leftoverBytes = bytesReceived - offset;
+        if (leftoverBytes > 0) {
+            memmove(buffer, buffer + offset, leftoverBytes);
         }
     }
 }
