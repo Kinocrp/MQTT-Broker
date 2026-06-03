@@ -123,7 +123,13 @@ void handleClient(SOCKET clientSocket) {
 
                         {
                             std::lock_guard<std::mutex> lock(broker_mutex);
-                            topic_subscribers[topic].push_back(clientSocket);
+                            std::vector<SOCKET>& subs = topic_subscribers[topic];
+                            if (std::find(subs.begin(), subs.end(), clientSocket) == subs.end()) {
+                                subs.push_back(clientSocket);
+                                std::cout << "          => Added new subscriber." << std::endl;
+                            } else {
+                                std::cout << "          => Duplicate subscription ignored." << std::endl;
+                            }
                         }
 
                         subackPayload.push_back(0x00);
