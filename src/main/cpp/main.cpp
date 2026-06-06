@@ -56,7 +56,7 @@ void handleClient(SOCKET clientSocket) {
 
             unsigned char packetType = buffer[offset] & 0xF0;
 
-            int multiplier = 1;
+            int shift = 0;
             int remainingLength = 0;
             int headerLength = 1;
             unsigned char encodedByte;
@@ -66,9 +66,10 @@ void handleClient(SOCKET clientSocket) {
                 if (offset + headerLength >= bytesReceived) break;
 
                 encodedByte = buffer[offset + headerLength];
-                remainingLength += (encodedByte & 127) * multiplier;
-                multiplier *= 128;
+                remainingLength += (encodedByte & 127) << shift;
+                shift += 7;
                 headerLength++;
+
                 if ((encodedByte & 128) == 0) {
                     headerComplete = true;
                     break;
